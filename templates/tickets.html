@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Tickets{% endblock %}
+{% block scripts %}
+<script>
+    const PRICES = { ADULT: 14.50, CHILD: 9.00, SENIOR: 11.00 };
+
+    function updatePrice() {
+      document.getElementById("price").value = PRICES[document.getElementById("type").value];
+    }
+
+    async function init() {
+      const [screenings, employees] = await Promise.all([
+        apiGet("/api/screenings"), apiGet("/api/employees")
+      ]);
+      document.getElementById("screening").innerHTML = screenings.map(s =>
+        `<option value="${s.SCREENING_ID}">
+          ${s.MOVIE_TITLE} [${s.MOVIE_RATING}] - ${s.SCREENING_DATE} ${fmtTime(s.SCREENING_START_TIME)}
+          (Theater #${s.THEATER_ID}, ${s.SEATS_AVAILABLE} seats left)
+        </option>`).join("");
+
+      // Only cashiers can sell tickets
+      const cashiers = employees.filter(e => e.ROLE === "CASHIER");
+      document.getElementById("cashier").innerHTML = cashiers.map(e =>
+        `<option value="${e.EMPLOYEE_ID}">${e.EMPLOYEE_NAME}</option>`).join("");
+    }
+
+    async function loadTickets() {
+      const rows = await apiGet("/api/tickets");
+      document.getElementById("list").innerHTML = rows.length ? `
+        <table>
+          <tr><th>ID</th><th>Movie</th><th>Date/Time</th><th>Type</th>
+              <th>Price</th><th>Cashier</th><th>Status</th><th></th></tr>
+          ${rows.map(r => `
+            <tr>
+              <td>#${r.TICKET_ID}</td>
+              <td>${r.MOVIE_TITLE}</td>
+              <td>${r.SCREENING_DATE} ${fmtTime(r.SCREENING_START_TIME)}</td>
+              <td>${r.TICKET_TYPE}</td>
+              <td>$${r.TICKET_SALEPRICE}</td>
+              <td>${r.SOLD_BY}</td>
+              <td><span class="badge ${r.TICKET_STATUS.toLowerCase()}">${r.TICKET_STATUS}</span></td>
+              <td>${r.TICKET_STATUS === "ACTIVE"
+                    ? `<button class="danger" onclick="cancelTicket(${r.TICKET_ID})">Cancel</button>`
+                    : ""}</td>
+            </tr>`).join("")}
+        </table>` : "<p style='color:var(--muted)'>No tickets sold yet.</p>";
+    }
+
+    async function sell() {
+      const ageRaw = document.getElementById("age").value;
+      const body = {
+        screening_id: parseInt(document.getElementById("screening").value, 10),
+        employee_id:  parseInt(document.getElementById("cashier").value, 10),
+        ticket_type:  document.getElementById("type").value,
+        sale_price:   parseFloat(document.getElementById("price").value),
+        customer_age: ageRaw === "" ? null : parseInt(ageRaw, 10),
+      };
+      try {
+        await apiPost("/api/tickets", body);
+        showMessage("msg", "Ticket sold!", "ok");
+        loadTickets();
+        init();   // refresh seat counts in dropdown
+      } catch (e) {
+        showMessage("msg", e.message, "err");
+      }
+    }
+
+    async function cancelTicket(id) {
+      if (!confirm(`Cancel ticket #${id}? The seat will be released but the sales record is preserved.`)) return;
+      try {
+        await apiPost(`/api/tickets/${id}/cancel`, {});
+        showMessage("msg", "Ticket cancelled", "ok");
+        loadTickets();
+        init();
+      } catch (e) {
+        showMessage("msg", e.message, "err");
+      }
+    }
+
+    init().then(loadTickets);
+  </script>
+{% endblock %}
+{% block content %}
+  <div class="card">
+    <h2>Sell Ticket</h2>
+    <div class="row">
+      <div><label>Screening</label><select id="screening"></select></div>
+      <div><label>Cashier</label><select id="cashier"></select></div>
+      <div><label>Type</label>
+        <select id="type" onchange="updatePrice()">
+          <option value="ADULT">Adult</option>
+          <option value="CHILD">Child</option>
+          <option value="SENIOR">Senior</option>
+        </select>
+      </div>
+      <div><label>Price ($)</label><input type="number" id="price" step="0.01" value="14.50"></div>
+      <div><label>Customer Age</label><input type="number" id="age" min="0" placeholder="if R-rated"></div>
+      <div><button onclick="sell()">Sell Ticket</button></div>
+    </div>
+    <div id="msg"></div>
+    <p style="color: var(--muted); font-size: 13px; margin-top: 16px;">
+      Note: R-rated screenings require customer age (must be 17+). Capacity is
+      enforced automatically - sold-out screenings will be rejected.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>All Tickets</h2>
+    <div id="list">Loading…</div>
+  </div>
+
+  {% endblock %}

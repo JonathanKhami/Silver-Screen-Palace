@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Screenings{% endblock %}
+{% block scripts %}
+<script>
+    async function init() {
+      const [movies, theaters] = await Promise.all([
+        apiGet("/api/movies"), apiGet("/api/theaters")
+      ]);
+      document.getElementById("movie").innerHTML =
+        movies.map(m => `<option value="${m.MOVIE_ID}">${m.MOVIE_TITLE} (${m.MOVIE_RATING})</option>`).join("");
+      document.getElementById("theater").innerHTML =
+        theaters.map(t => `<option value="${t.THEATER_ID}">Theater #${t.THEATER_ID} (cap ${t.THEATER_CAPACITY})</option>`).join("");
+    }
+
+    async function loadScreenings() {
+      const rows = await apiGet("/api/screenings");
+      document.getElementById("list").innerHTML = rows.length ? `
+        <table>
+          <tr><th>Date</th><th>Time</th><th>Movie</th><th>Rating</th>
+              <th>Theater</th><th>Seats</th></tr>
+          ${rows.map(r => `
+            <tr>
+              <td>${r.SCREENING_DATE}</td>
+              <td>${fmtTime(r.SCREENING_START_TIME)}</td>
+              <td>${r.MOVIE_TITLE}</td>
+              <td><span class="rating">${r.MOVIE_RATING}</span></td>
+              <td>#${r.THEATER_ID}</td>
+              <td>${r.SEATS_AVAILABLE} / ${r.THEATER_CAPACITY}</td>
+            </tr>`).join("")}
+        </table>` : "<p style='color:var(--muted)'>No screenings yet.</p>";
+    }
+
+    async function schedule() {
+      const body = {
+        movie_id:   parseInt(document.getElementById("movie").value, 10),
+        theater_id: parseInt(document.getElementById("theater").value, 10),
+        date:       document.getElementById("date").value,
+        start_time: document.getElementById("time").value,
+      };
+      if (!body.date || !body.start_time)
+        return showMessage("msg", "Pick a date and time", "err");
+      try {
+        await apiPost("/api/screenings", body);
+        showMessage("msg", "Scheduled!", "ok");
+        loadScreenings();
+      } catch (e) {
+        showMessage("msg", e.message, "err");
+      }
+    }
+
+    init().then(loadScreenings);
+  </script>
+{% endblock %}
+{% block content %}
+  <div class="card">
+    <h2>Schedule Screening</h2>
+    <div class="row">
+      <div><label>Movie</label><select id="movie"></select></div>
+      <div><label>Theater</label><select id="theater"></select></div>
+      <div><label>Date</label><input type="date" id="date"></div>
+      <div><label>Start Time</label><input type="time" id="time"></div>
+      <div><button onclick="schedule()">Schedule</button></div>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>All Screenings</h2>
+    <div id="list">Loading…</div>
+  </div>
+
+  {% endblock %}

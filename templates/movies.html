@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Movies{% endblock %}
+{% block scripts %}
+<script>
+    async function loadMovies() {
+      const rows = await apiGet("/api/movies");
+      document.getElementById("list").innerHTML = rows.length ? `
+        <table>
+          <tr><th>ID</th><th>Title</th><th>Rating</th><th>Runtime</th></tr>
+          ${rows.map(r => `
+            <tr>
+              <td>${r.MOVIE_ID}</td>
+              <td>${r.MOVIE_TITLE}</td>
+              <td><span class="rating">${r.MOVIE_RATING}</span></td>
+              <td>${r.MOVIE_RUNTIME} min</td>
+            </tr>`).join("")}
+        </table>`
+        : "<p style='color:var(--muted)'>No movies yet.</p>";
+    }
+
+    async function addMovie() {
+      const title   = document.getElementById("title").value.trim();
+      const rating  = document.getElementById("rating").value;
+      const runtime = parseInt(document.getElementById("runtime").value, 10);
+      if (!title) return showMessage("msg", "Title required", "err");
+      try {
+        await apiPost("/api/movies", { title, rating, runtime });
+        showMessage("msg", `Added "${title}"`, "ok");
+        document.getElementById("title").value = "";
+        loadMovies();
+      } catch (e) {
+        showMessage("msg", e.message, "err");
+      }
+    }
+
+    loadMovies();
+  </script>
+{% endblock %}
+{% block content %}
+  <div class="card">
+    <h2>Add New Movie</h2>
+    <div class="row">
+      <div><label>Title</label><input id="title" placeholder="e.g. Inception"></div>
+      <div><label>Rating</label>
+        <select id="rating">
+          <option>G</option><option>PG</option>
+          <option selected>PG-13</option><option>R</option><option>NC-17</option>
+        </select>
+      </div>
+      <div><label>Runtime (min)</label><input id="runtime" type="number" min="1" value="120"></div>
+      <div><button onclick="addMovie()">Add Movie</button></div>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Movie Catalog</h2>
+    <div id="list">Loading…</div>
+  </div>
+
+  {% endblock %}

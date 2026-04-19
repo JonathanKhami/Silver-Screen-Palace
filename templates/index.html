@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Home — Silver Screen Palace{% endblock %}
+{% block scripts %}
+<script>
+    (async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        const rows = await apiGet(`/api/screenings?on_date=${today}`);
+        const list = document.getElementById("today-list");
+        if (!rows.length) {
+          list.innerHTML = "<p style='color:var(--muted)'>No screenings scheduled today.</p>";
+          return;
+        }
+        list.innerHTML = `
+          <table>
+            <tr><th>Movie</th><th>Rating</th><th>Time</th><th>Theater</th><th>Seats Left</th></tr>
+            ${rows.map(r => `
+              <tr>
+                <td>${r.MOVIE_TITLE}</td>
+                <td><span class="rating">${r.MOVIE_RATING}</span></td>
+                <td>${fmtTime(r.SCREENING_START_TIME)}</td>
+                <td>#${r.THEATER_ID}</td>
+                <td>${r.SEATS_AVAILABLE} / ${r.THEATER_CAPACITY}</td>
+              </tr>`).join("")}
+          </table>`;
+      } catch (e) {
+        document.getElementById("today-list").innerHTML =
+          `<p class="msg err">Could not load: ${e.message}</p>`;
+      }
+    })();
+  </script>
+{% endblock %}
+{% block content %}
+  <div class="card">
+    <h2>Welcome to Silver Screen Palace</h2>
+    <p>Rochester Hills' premier movie theater management system.</p>
+    <p style="color: var(--muted);">
+      Use the navigation above to browse movies, view showtimes,
+      sell tickets, or generate sales reports.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Today's Screenings</h2>
+    <div id="today-list">Loading…</div>
+  </div>
+
+  {% endblock %}
