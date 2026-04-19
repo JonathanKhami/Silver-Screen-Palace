@@ -1,50 +1,76 @@
 {% extends "base.html" %}
-{% block title %}Reports{% endblock %}
+{% block title %}Reports — Silver Screen Palace{% endblock %}
+{% block content %}
+
+<div class="container">
+  <span class="section-label">Management Dashboard</span>
+  <h2 class="gold">Sales & Occupancy Reports</h2>
+
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div style="padding: 20px 24px; border-bottom: 1px solid var(--border);">
+      <h2 style="font-size: 20px;">Sales by Movie</h2>
+    </div>
+    <div id="sales" style="padding: 20px;">
+      <div class="loading"><div class="spinner"></div><span>Loading sales…</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div style="padding: 20px 24px; border-bottom: 1px solid var(--border);">
+      <h2 style="font-size: 20px;">Screening Occupancy</h2>
+    </div>
+    <div id="occ" style="padding: 20px;">
+      <div class="loading"><div class="spinner"></div><span>Loading occupancy…</span></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
 {% block scripts %}
 <script>
-    (async () => {
-      // Sales by movie
-      const sales = await apiGet("/api/reports/sales-by-movie");
-      document.getElementById("sales").innerHTML = `
-        <table>
-          <tr><th>Movie</th><th>Tickets Sold</th><th>Cancelled</th><th>Revenue</th></tr>
-          ${sales.map(r => `
-            <tr>
-              <td>${r.MOVIE_TITLE}</td>
-              <td>${r.TICKETS_SOLD}</td>
-              <td>${r.TICKETS_CANCELLED}</td>
-              <td>$${Number(r.REVENUE).toFixed(2)}</td>
-            </tr>`).join("")}
-        </table>`;
+  (async () => {
+    const sales = await apiGet("/api/reports/sales-by-movie");
+    const salesEl = document.getElementById("sales");
+    salesEl.style.padding = "0";
+    salesEl.innerHTML = `
+      <table>
+        <tr><th>Movie</th><th>Tickets Sold</th><th>Cancelled</th><th>Revenue</th></tr>
+        ${sales.map(r => `
+          <tr>
+            <td>${r.MOVIE_TITLE}</td>
+            <td>${r.TICKETS_SOLD}</td>
+            <td>${r.TICKETS_CANCELLED}</td>
+            <td style="color: var(--accent); font-weight: 600;">$${Number(r.REVENUE).toFixed(2)}</td>
+          </tr>`).join("")}
+      </table>`;
 
-      // Occupancy
-      const occ = await apiGet("/api/reports/occupancy");
-      document.getElementById("occ").innerHTML = `
-        <table>
-          <tr><th>Movie</th><th>Date</th><th>Time</th>
-              <th>Seats Sold</th><th>Capacity</th><th>Occupancy</th></tr>
-          ${occ.map(r => `
+    const occ = await apiGet("/api/reports/occupancy");
+    const occEl = document.getElementById("occ");
+    occEl.style.padding = "0";
+    occEl.innerHTML = `
+      <table>
+        <tr><th>Movie</th><th>Date</th><th>Time</th>
+            <th>Seats Sold</th><th>Capacity</th><th>Occupancy</th></tr>
+        ${occ.map(r => {
+          const pct = r.OCCUPANCY_PCT ?? 0;
+          return `
             <tr>
               <td>${r.MOVIE_TITLE}</td>
               <td>${r.SCREENING_DATE}</td>
               <td>${fmtTime(r.SCREENING_START_TIME)}</td>
               <td>${r.SEATS_SOLD}</td>
               <td>${r.THEATER_CAPACITY}</td>
-              <td>${r.OCCUPANCY_PCT ?? 0}%</td>
-            </tr>`).join("")}
-        </table>`;
-    })();
-  </script>
+              <td>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="flex: 1; max-width: 100px; height: 6px; background: var(--bg-2); border-radius: 3px; overflow: hidden;">
+                    <div style="height: 100%; width: ${pct}%; background: linear-gradient(90deg, var(--ok), var(--accent));"></div>
+                  </div>
+                  <span style="min-width: 48px;">${pct}%</span>
+                </div>
+              </td>
+            </tr>`;
+        }).join("")}
+      </table>`;
+  })();
+</script>
 {% endblock %}
-{% block content %}
-  <div class="card">
-    <h2>Sales by Movie</h2>
-    <div id="sales">Loading…</div>
-  </div>
-
-  <div class="card">
-    <h2>Screening Occupancy</h2>
-    <div id="occ">Loading…</div>
-  </div>
-
-  {% endblock %}

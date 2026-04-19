@@ -1,48 +1,107 @@
 {% extends "base.html" %}
-{% block title %}Home — Silver Screen Palace{% endblock %}
+{% block title %}Silver Screen Palace — Rochester Hills{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <div class="hero-content">
+    <span class="section-label fade-in">Now Playing in Rochester Hills</span>
+    <h1 class="fade-in d1">Where Every Seat<br><span class="gold">Tells a Story</span></h1>
+    <p class="fade-in d2">
+      Experience the magic of cinema at Rochester Hills' premier movie theater.
+      Premium sound, plush seating, and the biggest screens in town.
+    </p>
+    <div class="cta fade-in d3">
+      <a href="/screenings"><button>View Showtimes</button></a>
+      <a href="/movies"><button class="ghost">Browse Movies</button></a>
+    </div>
+  </div>
+</section>
+
+<div class="container">
+  <span class="section-label">Now Showing</span>
+  <h2 class="gold">Featured Films</h2>
+  <div id="featured" class="movie-grid">
+    <div class="loading"><div class="spinner"></div><span>Loading films…</span></div>
+  </div>
+</div>
+
+<div class="container">
+  <span class="section-label">Today's Screenings</span>
+  <h2>Tonight at the Palace</h2>
+  <div id="today-list">
+    <div class="loading"><div class="spinner"></div><span>Checking tonight's showtimes…</span></div>
+  </div>
+</div>
+
+{% endblock %}
 {% block scripts %}
 <script>
-    (async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      try {
-        const rows = await apiGet(`/api/screenings?on_date=${today}`);
-        const list = document.getElementById("today-list");
-        if (!rows.length) {
-          list.innerHTML = "<p style='color:var(--muted)'>No screenings scheduled today.</p>";
-          return;
-        }
-        list.innerHTML = `
-          <table>
-            <tr><th>Movie</th><th>Rating</th><th>Time</th><th>Theater</th><th>Seats Left</th></tr>
-            ${rows.map(r => `
-              <tr>
-                <td>${r.MOVIE_TITLE}</td>
-                <td><span class="rating">${r.MOVIE_RATING}</span></td>
-                <td>${fmtTime(r.SCREENING_START_TIME)}</td>
-                <td>#${r.THEATER_ID}</td>
-                <td>${r.SEATS_AVAILABLE} / ${r.THEATER_CAPACITY}</td>
-              </tr>`).join("")}
-          </table>`;
-      } catch (e) {
-        document.getElementById("today-list").innerHTML =
-          `<p class="msg err">Could not load: ${e.message}</p>`;
+  function posterOrPlaceholder(url, title) {
+    if (url) return `<div class="movie-poster"><img src="${url}" alt="${title}" loading="lazy"></div>`;
+    return `<div class="movie-poster no-image">No poster</div>`;
+  }
+
+  async function loadFeatured() {
+    try {
+      const movies = await apiGet("/api/movies");
+      const el = document.getElementById("featured");
+      if (!movies.length) { el.innerHTML = "<p style='color:var(--muted)'>No movies yet.</p>"; return; }
+      el.innerHTML = movies.slice(0, 5).map((m, i) => `
+        <div class="movie-card fade-in" style="animation-delay:${i*0.08}s"
+             onclick="location.href='/screenings?movie=${m.MOVIE_ID}'">
+          ${m.MOVIE_POSTER
+            ? `<div class="movie-poster">
+                 <span class="poster-rating">${m.MOVIE_RATING}</span>
+                 <img src="${m.MOVIE_POSTER}" alt="${m.MOVIE_TITLE}" loading="lazy">
+               </div>`
+            : `<div class="movie-poster no-image">No poster</div>`}
+          <div class="movie-info">
+            <div class="title">${m.MOVIE_TITLE}</div>
+            <div class="meta">${m.MOVIE_RUNTIME} min</div>
+          </div>
+        </div>`).join("");
+    } catch (e) {
+      document.getElementById("featured").innerHTML =
+        `<p class="msg err">Could not load: ${e.message}</p>`;
+    }
+  }
+
+  async function loadToday() {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const rows = await apiGet(`/api/screenings?on_date=${today}`);
+      const list = document.getElementById("today-list");
+      if (!rows.length) {
+        list.innerHTML = "<p style='color:var(--muted); padding: 20px 0;'>No screenings scheduled today. Check showtimes for upcoming screenings.</p>";
+        return;
       }
-    })();
-  </script>
+      list.innerHTML = rows.map((r, i) => {
+        const pct = 100 * (1 - r.SEATS_AVAILABLE / r.THEATER_CAPACITY);
+        return `
+          <div class="showtime-card fade-in" style="animation-delay:${i*0.06}s">
+            <div class="poster-sm">
+              ${r.MOVIE_POSTER ? `<img src="${r.MOVIE_POSTER}" alt="${r.MOVIE_TITLE}" loading="lazy">` : ''}
+            </div>
+            <div class="details">
+              <h3>${r.MOVIE_TITLE}</h3>
+              <div class="meta">
+                <span><span class="rating ${r.MOVIE_RATING==='R'?'r':''}">${r.MOVIE_RATING}</span></span>
+                <span>⏱ ${r.MOVIE_RUNTIME} min</span>
+                <span>🎫 ${fmtTime(r.SCREENING_START_TIME)}</span>
+                <span>🎥 Theater #${r.THEATER_ID}</span>
+              </div>
+              <div class="seats">${r.SEATS_AVAILABLE} of ${r.THEATER_CAPACITY} seats available</div>
+              <div class="seats-bar"><div class="fill" style="width:${pct}%"></div></div>
+            </div>
+          </div>`;
+      }).join("");
+    } catch (e) {
+      document.getElementById("today-list").innerHTML =
+        `<p class="msg err">Could not load: ${e.message}</p>`;
+    }
+  }
+
+  loadFeatured();
+  loadToday();
+</script>
 {% endblock %}
-{% block content %}
-  <div class="card">
-    <h2>Welcome to Silver Screen Palace</h2>
-    <p>Rochester Hills' premier movie theater management system.</p>
-    <p style="color: var(--muted);">
-      Use the navigation above to browse movies, view showtimes,
-      sell tickets, or generate sales reports.
-    </p>
-  </div>
-
-  <div class="card">
-    <h2>Today's Screenings</h2>
-    <div id="today-list">Loading…</div>
-  </div>
-
-  {% endblock %}

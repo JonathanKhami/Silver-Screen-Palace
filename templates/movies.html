@@ -1,61 +1,197 @@
 {% extends "base.html" %}
-{% block title %}Movies{% endblock %}
-{% block scripts %}
-<script>
-    async function loadMovies() {
-      const rows = await apiGet("/api/movies");
-      document.getElementById("list").innerHTML = rows.length ? `
-        <table>
-          <tr><th>ID</th><th>Title</th><th>Rating</th><th>Runtime</th></tr>
-          ${rows.map(r => `
-            <tr>
-              <td>${r.MOVIE_ID}</td>
-              <td>${r.MOVIE_TITLE}</td>
-              <td><span class="rating">${r.MOVIE_RATING}</span></td>
-              <td>${r.MOVIE_RUNTIME} min</td>
-            </tr>`).join("")}
-        </table>`
-        : "<p style='color:var(--muted)'>No movies yet.</p>";
-    }
-
-    async function addMovie() {
-      const title   = document.getElementById("title").value.trim();
-      const rating  = document.getElementById("rating").value;
-      const runtime = parseInt(document.getElementById("runtime").value, 10);
-      if (!title) return showMessage("msg", "Title required", "err");
-      try {
-        await apiPost("/api/movies", { title, rating, runtime });
-        showMessage("msg", `Added "${title}"`, "ok");
-        document.getElementById("title").value = "";
-        loadMovies();
-      } catch (e) {
-        showMessage("msg", e.message, "err");
-      }
-    }
-
-    loadMovies();
-  </script>
-{% endblock %}
+{% block title %}Movies — Silver Screen Palace{% endblock %}
 {% block content %}
+
+<div class="container">
+  <span class="section-label">Our Catalog</span>
+  <h2 class="gold">All Movies</h2>
+
+  <!-- Add Movie card -->
   <div class="card">
-    <h2>Add New Movie</h2>
+    <h2 style="font-size: 22px; margin-bottom: 8px;">Add Movie</h2>
+    <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px;">
+      Search for a movie to auto-fill all the details, or just type a title and click
+      "Quick Add" to use the top match.
+    </p>
+
     <div class="row">
-      <div><label>Title</label><input id="title" placeholder="e.g. Inception"></div>
-      <div><label>Rating</label>
-        <select id="rating">
-          <option>G</option><option>PG</option>
-          <option selected>PG-13</option><option>R</option><option>NC-17</option>
-        </select>
+      <div style="flex: 3;">
+        <label>Movie Title</label>
+        <input id="search-q" placeholder="e.g. Inception" onkeydown="if(event.key==='Enter') doSearch()">
       </div>
-      <div><label>Runtime (min)</label><input id="runtime" type="number" min="1" value="120"></div>
-      <div><button onclick="addMovie()">Add Movie</button></div>
+      <div><button onclick="doSearch()">🔍 Search</button></div>
+      <div><button class="ghost" onclick="doQuickAdd()">⚡ Quick Add</button></div>
     </div>
     <div id="msg"></div>
+
+    <!-- Search results -->
+    <div id="search-results" style="margin-top: 20px;"></div>
+
+    <!-- Selected movie preview (before saving) -->
+    <div id="selected-preview" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);"></div>
   </div>
 
-  <div class="card">
-    <h2>Movie Catalog</h2>
-    <div id="list">Loading…</div>
+  <h2 style="font-size: 22px; margin-top: 40px;">Movie Catalog</h2>
+  <div id="list">
+    <div class="loading"><div class="spinner"></div><span>Loading catalog…</span></div>
   </div>
+</div>
 
-  {% endblock %}
+{% endblock %}
+{% block scripts %}
+<script>
+  let selectedMovie = null;  // holds the TMDB-fetched movie before saving
+
+  // ---------- Catalog ----------
+  async function loadMovies() {
+    const movies = await apiGet("/api/movies");
+    if (!movies.length) {
+      document.getElementById("list").innerHTML =
+        "<p style='color:var(--muted)'>No movies in the catalog yet.</p>";
+      return;
+    }
+    document.getElementById("list").innerHTML = `
+      <div class="movie-grid">
+        ${movies.map((m, i) => `
+          <div class="movie-card fade-in" style="animation-delay:${Math.min(i,10)*0.05}s"
+               onclick="location.href='/screenings?movie=${m.MOVIE_ID}'">
+            ${m.MOVIE_POSTER
+              ? `<div class="movie-poster">
+                   <span class="poster-rating">${m.MOVIE_RATING}</span>
+                   <img src="${m.MOVIE_POSTER}" alt="${m.MOVIE_TITLE}" loading="lazy">
+                 </div>`
+              : `<div class="movie-poster no-image">
+                   <span class="poster-rating">${m.MOVIE_RATING}</span>
+                   No poster
+                 </div>`}
+            <div class="movie-info">
+              <div class="title">${m.MOVIE_TITLE}</div>
+              <div class="meta">${m.MOVIE_RUNTIME} min · #${m.MOVIE_ID}</div>
+            </div>
+          </div>`).join("")}
+      </div>`;
+  }
+
+  // ---------- Search flow ----------
+  async function doSearch() {
+    const q = document.getElementById("search-q").value.trim();
+    if (!q) return showMessage("msg", "Type a movie title first", "err");
+
+    const box = document.getElementById("search-results");
+    box.innerHTML = '<div class="loading"><div class="spinner"></div><span>Searching TMDB…</span></div>';
+
+    try {
+      const results = await apiGet(`/api/tmdb/search?q=${encodeURIComponent(q)}`);
+      if (!results.length) {
+        box.innerHTML = `<p class="msg err">No matches for "${q}"</p>`;
+        return;
+      }
+      box.innerHTML = `
+        <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+          ${results.length} match${results.length===1?'':'es'} found — click one to use its details:
+        </p>
+        <div class="movie-grid" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
+          ${results.map(r => `
+            <div class="movie-card" onclick='pickMovie(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+              ${r.poster
+                ? `<div class="movie-poster"><img src="${r.poster}" alt="${r.title}" loading="lazy"></div>`
+                : `<div class="movie-poster no-image">No poster</div>`}
+              <div class="movie-info">
+                <div class="title">${r.title}</div>
+                <div class="meta">${r.year || 'Unknown year'}</div>
+              </div>
+            </div>`).join("")}
+        </div>`;
+    } catch (e) {
+      box.innerHTML = `<p class="msg err">Search failed: ${e.message}</p>`;
+    }
+  }
+
+  // User picked a search result - fetch full details and preview
+  async function pickMovie(stub) {
+    const box = document.getElementById("selected-preview");
+    box.style.display = "block";
+    box.innerHTML = '<div class="loading"><div class="spinner"></div><span>Fetching details…</span></div>';
+    document.getElementById("search-results").innerHTML = "";
+
+    try {
+      const m = await apiGet(`/api/tmdb/details/${stub.tmdb_id}`);
+      selectedMovie = m;
+      renderPreview(m);
+    } catch (e) {
+      box.innerHTML = `<p class="msg err">Could not fetch details: ${e.message}</p>`;
+    }
+  }
+
+  // ---------- Quick Add (auto-lookup) ----------
+  async function doQuickAdd() {
+    const q = document.getElementById("search-q").value.trim();
+    if (!q) return showMessage("msg", "Type a movie title first", "err");
+
+    const box = document.getElementById("selected-preview");
+    box.style.display = "block";
+    box.innerHTML = '<div class="loading"><div class="spinner"></div><span>Looking up…</span></div>';
+    document.getElementById("search-results").innerHTML = "";
+
+    try {
+      const m = await apiGet(`/api/tmdb/lookup?title=${encodeURIComponent(q)}`);
+      selectedMovie = m;
+      renderPreview(m);
+    } catch (e) {
+      box.innerHTML = `<p class="msg err">${e.message}</p>`;
+    }
+  }
+
+  // ---------- Preview before save ----------
+  function renderPreview(m) {
+    const box = document.getElementById("selected-preview");
+    box.innerHTML = `
+      <div style="display: flex; gap: 20px; align-items: flex-start;">
+        ${m.poster
+          ? `<img src="${m.poster}" alt="${m.title}" style="width: 140px; border-radius: 8px;">`
+          : `<div style="width:140px; aspect-ratio:2/3; background:var(--bg-2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px;">No poster</div>`}
+        <div style="flex: 1;">
+          <h2 style="font-size: 22px; margin-bottom: 8px;">${m.title} <span style="color: var(--muted); font-weight: 400; font-size: 15px;">(${m.year || '—'})</span></h2>
+          <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <span class="rating ${m.rating==='R'?'r':''}">${m.rating}</span>
+            <span style="color: var(--muted); font-size: 13px;">${m.runtime} min</span>
+          </div>
+          <p style="color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 16px;">
+            ${m.description || 'No description available.'}
+          </p>
+          <div style="display: flex; gap: 10px;">
+            <button onclick="saveMovie()">✓ Add to Catalog</button>
+            <button class="ghost" onclick="cancelPreview()">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function cancelPreview() {
+    selectedMovie = null;
+    document.getElementById("selected-preview").style.display = "none";
+    document.getElementById("selected-preview").innerHTML = "";
+  }
+
+  async function saveMovie() {
+    if (!selectedMovie) return;
+    try {
+      await apiPost("/api/movies", {
+        title:       selectedMovie.title,
+        rating:      selectedMovie.rating,
+        runtime:     selectedMovie.runtime,
+        poster:      selectedMovie.poster,
+        description: selectedMovie.description,
+      });
+      showMessage("msg", `Added "${selectedMovie.title}" to catalog`, "ok");
+      document.getElementById("search-q").value = "";
+      cancelPreview();
+      loadMovies();
+    } catch (e) {
+      showMessage("msg", e.message, "err");
+    }
+  }
+
+  loadMovies();
+</script>
+{% endblock %}

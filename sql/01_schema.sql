@@ -14,10 +14,12 @@ USE silver_screen;
 -- MOVIE
 -- ---------------------------
 CREATE TABLE MOVIE (
-    MOVIE_ID       INT AUTO_INCREMENT PRIMARY KEY,
-    MOVIE_TITLE    VARCHAR(100) NOT NULL,
-    MOVIE_RATING   VARCHAR(5)   NOT NULL,   -- 'G','PG','PG-13','R'
-    MOVIE_RUNTIME  INT          NOT NULL    -- minutes
+    MOVIE_ID           INT AUTO_INCREMENT PRIMARY KEY,
+    MOVIE_TITLE        VARCHAR(100) NOT NULL,
+    MOVIE_RATING       VARCHAR(5)   NOT NULL,   -- 'G','PG','PG-13','R'
+    MOVIE_RUNTIME      INT          NOT NULL,   -- minutes
+    MOVIE_POSTER       VARCHAR(500) NULL,       -- URL to poster image
+    MOVIE_DESCRIPTION  TEXT         NULL
 );
 
 -- ---------------------------

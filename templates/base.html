@@ -5,22 +5,29 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}Silver Screen Palace{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js"></script>
 </head>
 <body>
   <header>
-    <h1>🎬 SILVER SCREEN PALACE</h1>
+    <h1>🎬 Silver Screen Palace</h1>
     <nav>
       <a href="/">Home</a>
       <a href="/movies">Movies</a>
-      <a href="/screenings">Screenings</a>
+      <a href="/screenings">Showtimes</a>
       <a href="/tickets">Tickets</a>
       <a href="/reports">Reports</a>
     </nav>
   </header>
+
   <main>
     {% block content %}{% endblock %}
   </main>
-  <script src="/static/app.js"></script>
+
+  <footer>
+    <p><span class="gold">SILVER SCREEN PALACE</span> · Rochester Hills, MI</p>
+    <p style="margin-top: 6px; font-size: 12px;">CSI 3450 Database Design Project · Winter 2026</p>
+  </footer>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

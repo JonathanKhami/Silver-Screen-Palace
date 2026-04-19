@@ -17,6 +17,8 @@ class MovieIn(BaseModel):
     title:   str
     rating:  str = Field(pattern="^(G|PG|PG-13|R|NC-17)$")
     runtime: int = Field(gt=0)
+    poster:      Optional[str] = None
+    description: Optional[str] = None
 
 
 # ----- Screening -----

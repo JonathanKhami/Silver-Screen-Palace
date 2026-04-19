@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, date
 
 from .database import get_db
 from .models import MovieIn, ScreeningIn, TicketIn
+from . import tmdb
 
 app = FastAPI(title="Silver Screen Palace")
 
@@ -63,12 +64,45 @@ def list_movies(db=Depends(get_db)):
 def create_movie(movie: MovieIn, db=Depends(get_db)):
     conn, cur = db
     cur.execute(
-        "INSERT INTO MOVIE (MOVIE_TITLE, MOVIE_RATING, MOVIE_RUNTIME) "
-        "VALUES (%s, %s, %s)",
-        (movie.title, movie.rating, movie.runtime),
+        "INSERT INTO MOVIE (MOVIE_TITLE, MOVIE_RATING, MOVIE_RUNTIME, "
+        "MOVIE_POSTER, MOVIE_DESCRIPTION) VALUES (%s, %s, %s, %s, %s)",
+        (movie.title, movie.rating, movie.runtime,
+         movie.poster, movie.description),
     )
     conn.commit()
     return {"movie_id": cur.lastrowid, **movie.model_dump()}
+
+
+# ============================================================
+# TMDB (The Movie Database) - auto-fill movie info
+# ============================================================
+@app.get("/api/tmdb/search")
+async def tmdb_search(q: str):
+    """Search TMDB by title. Returns 6 matches with posters for the user
+    to pick from."""
+    if not q or len(q.strip()) < 2:
+        raise HTTPException(400, "Search query must be at least 2 characters")
+    return await tmdb.search_movies(q.strip())
+
+
+@app.get("/api/tmdb/details/{tmdb_id}")
+async def tmdb_details(tmdb_id: int):
+    """Given a TMDB movie ID, return the full info (runtime, rating,
+    poster, description) so the Add Movie form can auto-fill."""
+    return await tmdb.get_movie_details(tmdb_id)
+
+
+@app.get("/api/tmdb/lookup")
+async def tmdb_lookup(title: str):
+    """Auto-lookup: given just a title, return best-match full details.
+    Used as the fallback when the user types a title and clicks Add
+    without picking from search results."""
+    if not title or len(title.strip()) < 2:
+        raise HTTPException(400, "Title must be at least 2 characters")
+    result = await tmdb.lookup_by_title(title.strip())
+    if not result:
+        raise HTTPException(404, f"No match found for '{title}'")
+    return result
 
 
 # ============================================================
@@ -116,6 +150,7 @@ def list_screenings(movie_id: int | None = None,
     sql = """
         SELECT s.SCREENING_ID, s.SCREENING_DATE, s.SCREENING_START_TIME,
                m.MOVIE_ID, m.MOVIE_TITLE, m.MOVIE_RATING, m.MOVIE_RUNTIME,
+               m.MOVIE_POSTER, m.MOVIE_DESCRIPTION,
                t.THEATER_ID, t.THEATER_CAPACITY,
                (t.THEATER_CAPACITY
                 - COALESCE((SELECT COUNT(*) FROM TICKET
