@@ -53,24 +53,37 @@
     document.getElementById("list").innerHTML = `
       <div class="movie-grid">
         ${movies.map((m, i) => `
-          <div class="movie-card fade-in" style="animation-delay:${Math.min(i,10)*0.05}s"
-               onclick="location.href='/screenings?movie=${m.MOVIE_ID}'">
+          <div class="movie-card fade-in ${m.MOVIE_ACTIVE ? "active" : "inactive"}" style="animation-delay:${Math.min(i,10)*0.05}s">
             ${m.MOVIE_POSTER
-              ? `<div class="movie-poster">
+              ? `<div class="movie-poster" onclick="location.href='/screenings?movie=${m.MOVIE_ID}'">
                    <span class="poster-rating">${m.MOVIE_RATING}</span>
                    <img src="${m.MOVIE_POSTER}" alt="${m.MOVIE_TITLE}" loading="lazy">
                  </div>`
-              : `<div class="movie-poster no-image">
+              : `<div class="movie-poster no-image" onclick="location.href='/screenings?movie=${m.MOVIE_ID}'">
                    <span class="poster-rating">${m.MOVIE_RATING}</span>
                    No poster
                  </div>`}
             <div class="movie-info">
               <div class="title">${m.MOVIE_TITLE}</div>
               <div class="meta">${m.MOVIE_RUNTIME} min · #${m.MOVIE_ID}</div>
+              <button class="poster-delete" onclick="updateMovieActive(${m.MOVIE_ID}, ${!m.MOVIE_ACTIVE})">
+                ${m.MOVIE_ACTIVE ? "Remove" : "Add"}
+              </button>
             </div>
           </div>`).join("")}
       </div>`;
   }
+
+  async function updateMovieActive(id, active) {
+    try {
+      await apiPut(`/api/movies/${id}/active=${active}`);
+      loadMovies();
+    } catch (e) {
+      showMessage("msg", e.message, "err");
+    }
+  }
+
+
 
   // ---------- Search flow ----------
   async function doSearch() {

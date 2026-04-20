@@ -15,6 +15,7 @@ USE silver_screen;
 -- ---------------------------
 CREATE TABLE MOVIE (
     MOVIE_ID           INT AUTO_INCREMENT PRIMARY KEY,
+    MOVIE_ACTIVE       BOOLEAN NOT NULL DEFAULT 1,
     MOVIE_TITLE        VARCHAR(100) NOT NULL,
     MOVIE_RATING       VARCHAR(5)   NOT NULL,   -- 'G','PG','PG-13','R'
     MOVIE_RUNTIME      INT          NOT NULL,   -- minutes
