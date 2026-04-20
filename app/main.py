@@ -212,6 +212,8 @@ def create_screening(s: ScreeningIn, db=Depends(get_db)):
     row = cur.fetchone()
     if not row:
         raise HTTPException(404, "Movie not found")
+    if not bool(row["MOVIE_ACTIVE"]):
+        raise HTTPException(400, "Movie not active in catelog")
     runtime_min = row["MOVIE_RUNTIME"]
 
     new_start = datetime.combine(s.date, s.start_time)
