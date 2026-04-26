@@ -15,7 +15,15 @@ silver_screen/
 │   ├── 01_schema.sql    <- Creates database + 8 tables
 │   └── 02_seed.sql      <- Sample data
 ├── static/              <- CSS + JS
+│   ├── app.js           <- Web utilities and REST API convenience functions
+│   └── style.css        <- Styling used throughout the website
 ├── templates/           <- HTML pages (Jinja2)
+│   ├── base.html        <- The base HTML file that other templates build from
+│   ├── index.html       <- Homepage, promotes featured films and upcoming screenings
+│   ├── movies.html      <- Add/remove movies to/from the catalog
+│   ├── reports.html     <- Theater sales reports
+│   ├── screenings.html  <- Schedule new screenings, list existing ones
+│   └── tickets.html     <- Record ticket sales, cancel existing tickets
 ├── .env.example         <- Copy to .env and fill in your password
 └── requirements.txt
 ```
