@@ -9,7 +9,7 @@ Routes fall into three groups:
   2. API endpoints -> JSON in / JSON out, under /api/...
   3. Reports       -> sales / occupancy reports for managers
 """
-
+import asyncio
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +21,41 @@ from .models import MovieIn, ScreeningIn, TicketIn
 from . import tmdb
 
 app = FastAPI(title="Silver Screen Palace")
+@app.on_event("startup")
+async def backfill_movie_posters():
+    """
+    On app startup, find any movies missing posters/descriptions and
+    auto-fetch them from TMDB. Means seed movies get posters automatically
+    without us hardcoding URLs in the SQL.
+    """
+    from .database import connection_pool
+    conn = connection_pool.get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT MOVIE_ID, MOVIE_TITLE FROM MOVIE
+            WHERE MOVIE_POSTER IS NULL OR MOVIE_DESCRIPTION IS NULL
+        """)
+        missing = cur.fetchall()
+        if not missing:
+            return
+        print(f"[startup] Fetching TMDB data for {len(missing)} movies...")
+        for m in missing:
+            try:
+                details = await tmdb.lookup_by_title(m["MOVIE_TITLE"])
+                if details:
+                    cur.execute(
+                        "UPDATE MOVIE SET MOVIE_POSTER=%s, MOVIE_DESCRIPTION=%s "
+                        "WHERE MOVIE_ID=%s",
+                        (details["poster"], details["description"], m["MOVIE_ID"])
+                    )
+                    print(f"[startup]   ✓ {m['MOVIE_TITLE']}")
+            except Exception as e:
+                print(f"[startup]   ✗ {m['MOVIE_TITLE']}: {e}")
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 
 # Serve /static (css, js) and /templates (html)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -66,7 +101,7 @@ def list_active_movies(db=Depends(get_db)):
     cur.execute("SELECT * FROM MOVIE WHERE MOVIE_ACTIVE = 1 ORDER BY MOVIE_ACTIVE DESC, MOVIE_TITLE")
     return cur.fetchall()
 
-@app.get("api/movies/{movie_id}")
+@app.get("/api/movies/{movie_id}")
 def get_movie(movie_id: int, db=Depends(get_db)):
     conn, cur = db
     cur.execute("SELECT * FROM MOVIE WHERE MOVIE_ID = %s", (movie_id,))
@@ -84,15 +119,21 @@ def create_movie(movie: MovieIn, db=Depends(get_db)):
     conn.commit()
     return {"movie_id": cur.lastrowid, **movie.model_dump()}
 
-@app.put("/api/movies/{movie_id}/active={active}", status_code=201)
+@app.put("/api/movies/{movie_id}/active")
 def update_movie_active(movie_id: int, active: bool, db=Depends(get_db)):
+    """
+    Toggle whether a movie is active in the catalog.
+    Soft delete pattern - preserves screenings/tickets for FK integrity.
+    Call as: PUT /api/movies/5/active?active=true
+    """
     conn, cur = db
-    cur.execute("SELECT * FROM MOVIE WHERE MOVIE_ID = %s", (movie_id,))
+    cur.execute("SELECT MOVIE_ACTIVE FROM MOVIE WHERE MOVIE_ID = %s", (movie_id,))
     row = cur.fetchone()
     if not row:
         raise HTTPException(404, "Movie not found")
     if bool(row["MOVIE_ACTIVE"]) != active:
-        cur.execute("UPDATE MOVIE SET MOVIE_ACTIVE = %s WHERE MOVIE_ID = %s", (int(active), movie_id))
+        cur.execute("UPDATE MOVIE SET MOVIE_ACTIVE = %s WHERE MOVIE_ID = %s",
+                    (int(active), movie_id))
         conn.commit()
     return {"movie_id": movie_id, "movie_active": active}
     
@@ -139,23 +180,35 @@ def list_theaters(db=Depends(get_db)):
     cur.execute("SELECT * FROM THEATER ORDER BY THEATER_ID")
     return cur.fetchall()
 
+@app.put("/api/theaters/{theater_id}")
+def update_theater(theater_id: int, capacity: int, db=Depends(get_db)):
+    """
+    Update a theater's seating capacity.
+    Used by managers to adjust theater configuration.
+    """
+    conn, cur = db
+    if capacity < 1:
+        raise HTTPException(400, "Capacity must be at least 1")
+
+    cur.execute("SELECT THEATER_ID FROM THEATER WHERE THEATER_ID = %s",
+                (theater_id,))
+    if not cur.fetchone():
+        raise HTTPException(404, "Theater not found")
+
+    cur.execute("UPDATE THEATER SET THEATER_CAPACITY = %s WHERE THEATER_ID = %s",
+                (capacity, theater_id))
+    conn.commit()
+    return {"theater_id": theater_id, "theater_capacity": capacity}
+
 @app.get("/api/employees")
 def list_employees(db=Depends(get_db)):
-    """Returns every employee with their role (manager/cashier/usher)."""
+    """Returns every employee with their role (manager/cashier)."""
     conn, cur = db
     cur.execute("""
-        SELECT e.EMPLOYEE_ID, e.EMPLOYEE_NAME, e.EMPLOYEE_HIRE_DATE,
-               CASE
-                 WHEN m.EMPLOYEE_ID IS NOT NULL THEN 'MANAGER'
-                 WHEN c.EMPLOYEE_ID IS NOT NULL THEN 'CASHIER'
-                 WHEN u.EMPLOYEE_ID IS NOT NULL THEN 'USHER'
-                 ELSE 'STAFF'
-               END AS ROLE
-        FROM EMPLOYEE e
-        LEFT JOIN MANAGER m ON m.EMPLOYEE_ID = e.EMPLOYEE_ID
-        LEFT JOIN CASHIER c ON c.EMPLOYEE_ID = e.EMPLOYEE_ID
-        LEFT JOIN USHER   u ON u.EMPLOYEE_ID = e.EMPLOYEE_ID
-        ORDER BY e.EMPLOYEE_NAME
+        SELECT EMPLOYEE_ID, EMPLOYEE_NAME, EMPLOYEE_HIRE_DATE,
+               EMPLOYEE_ROLE AS ROLE
+        FROM EMPLOYEE
+        ORDER BY EMPLOYEE_NAME
     """)
     return cur.fetchall()
 
@@ -207,14 +260,16 @@ def create_screening(s: ScreeningIn, db=Depends(get_db)):
     conn, cur = db
 
     # Look up the movie's runtime so we can compute the end time
-    cur.execute("SELECT MOVIE_RUNTIME FROM MOVIE WHERE MOVIE_ID = %s",
+    # Look up the movie's runtime + active status
+    cur.execute("SELECT MOVIE_RUNTIME, MOVIE_ACTIVE FROM MOVIE WHERE MOVIE_ID = %s",
                 (s.movie_id,))
     row = cur.fetchone()
     if not row:
         raise HTTPException(404, "Movie not found")
     if not bool(row["MOVIE_ACTIVE"]):
-        raise HTTPException(400, "Movie not active in catelog")
+        raise HTTPException(400, "Movie is not active in catalog")
     runtime_min = row["MOVIE_RUNTIME"]
+
 
     new_start = datetime.combine(s.date, s.start_time)
     new_end   = new_start + timedelta(minutes=runtime_min)

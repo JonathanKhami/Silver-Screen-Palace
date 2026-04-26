@@ -76,7 +76,7 @@
 
   async function updateMovieActive(id, active) {
     try {
-      await apiPut(`/api/movies/${id}/active=${active}`);
+      await apiPut(`/api/movies/${id}/active?active=${active}`);
       loadMovies();
     } catch (e) {
       showMessage("msg", e.message, "err");

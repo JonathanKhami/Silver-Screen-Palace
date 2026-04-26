@@ -19,12 +19,13 @@ async function apiPost(url, body) {
   return data;
 }
 
-async function apiPut(url, body) {
-  const r = await fetch(url, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+async function apiPut(url, body = null) {
+  const opts = { method: "PUT" };
+  if (body !== null) {
+    opts.headers = { "Content-Type": "application/json" };
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(url, opts);
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     throw new Error(data.detail || "Request failed");

@@ -18,6 +18,18 @@
     <div id="msg"></div>
   </div>
 
+  <div class="card">
+    <h2 style="font-size: 22px; margin-bottom: 16px;">Update Theater Capacity</h2>
+    <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">
+      Managers can adjust seating capacity for each theater room.
+    </p>
+    <div class="row">
+      <div><label>Theater</label><select id="upd-theater"></select></div>
+      <div><label>New Capacity</label><input type="number" id="upd-capacity" min="1" placeholder="e.g. 100"></div>
+      <div><button onclick="updateTheater()">Update Capacity</button></div>
+    </div>
+    <div id="upd-msg"></div>
+  </div>
   <h2 style="font-size: 22px; margin-top: 40px;">All Showtimes</h2>
   <div id="list">
     <div class="loading"><div class="spinner"></div><span>Loading showtimes…</span></div>
@@ -33,8 +45,12 @@
     ]);
     document.getElementById("movie").innerHTML =
       movies.map(m => `<option value="${m.MOVIE_ID}">${m.MOVIE_TITLE} (${m.MOVIE_RATING})</option>`).join("");
-    document.getElementById("theater").innerHTML =
-      theaters.map(t => `<option value="${t.THEATER_ID}">Theater #${t.THEATER_ID} (cap ${t.THEATER_CAPACITY})</option>`).join("");
+  
+    const theaterOptions = theaters.map(t =>
+      `<option value="${t.THEATER_ID}">Theater #${t.THEATER_ID} (cap ${t.THEATER_CAPACITY})</option>`
+    ).join("");
+    document.getElementById("theater").innerHTML = theaterOptions;
+    document.getElementById("upd-theater").innerHTML = theaterOptions;
   }
 
   async function loadScreenings() {
@@ -93,5 +109,20 @@
   }
 
   init().then(loadScreenings);
+  async function updateTheater() {
+    const theater_id = parseInt(document.getElementById("upd-theater").value, 10);
+    const capacity   = parseInt(document.getElementById("upd-capacity").value, 10);
+    if (!capacity || capacity < 1)
+      return showMessage("upd-msg", "Enter a valid capacity (1 or more)", "err");
+    try {
+      await apiPut(`/api/theaters/${theater_id}?capacity=${capacity}`);
+      showMessage("upd-msg", `Theater #${theater_id} capacity updated to ${capacity}`, "ok");
+      document.getElementById("upd-capacity").value = "";
+      init();
+      loadScreenings();
+    } catch (e) {
+      showMessage("upd-msg", e.message, "err");
+    }
+  }
 </script>
 {% endblock %}
