@@ -57,8 +57,20 @@ def reports_page(request: Request):
 @app.get("/api/movies")
 def list_movies(db=Depends(get_db)):
     conn, cur = db
-    cur.execute("SELECT * FROM MOVIE ORDER BY MOVIE_TITLE")
+    cur.execute("SELECT * FROM MOVIE ORDER BY MOVIE_ACTIVE DESC, MOVIE_TITLE")
     return cur.fetchall()
+
+@app.get("/api/movies/active")
+def list_active_movies(db=Depends(get_db)):
+    conn, cur = db
+    cur.execute("SELECT * FROM MOVIE WHERE MOVIE_ACTIVE = 1 ORDER BY MOVIE_ACTIVE DESC, MOVIE_TITLE")
+    return cur.fetchall()
+
+@app.get("api/movies/{movie_id}")
+def get_movie(movie_id: int, db=Depends(get_db)):
+    conn, cur = db
+    cur.execute("SELECT * FROM MOVIE WHERE MOVIE_ID = %s", (movie_id,))
+    return cur.fetchone()
 
 @app.post("/api/movies", status_code=201)
 def create_movie(movie: MovieIn, db=Depends(get_db)):
@@ -71,6 +83,19 @@ def create_movie(movie: MovieIn, db=Depends(get_db)):
     )
     conn.commit()
     return {"movie_id": cur.lastrowid, **movie.model_dump()}
+
+@app.put("/api/movies/{movie_id}/active={active}", status_code=201)
+def update_movie_active(movie_id: int, active: bool, db=Depends(get_db)):
+    conn, cur = db
+    cur.execute("SELECT * FROM MOVIE WHERE MOVIE_ID = %s", (movie_id,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(404, "Movie not found")
+    if bool(row["MOVIE_ACTIVE"]) != active:
+        cur.execute("UPDATE MOVIE SET MOVIE_ACTIVE = %s WHERE MOVIE_ID = %s", (int(active), movie_id))
+        conn.commit()
+    return {"movie_id": movie_id, "movie_active": active}
+    
 
 
 # ============================================================
@@ -187,6 +212,8 @@ def create_screening(s: ScreeningIn, db=Depends(get_db)):
     row = cur.fetchone()
     if not row:
         raise HTTPException(404, "Movie not found")
+    if not bool(row["MOVIE_ACTIVE"]):
+        raise HTTPException(400, "Movie not active in catelog")
     runtime_min = row["MOVIE_RUNTIME"]
 
     new_start = datetime.combine(s.date, s.start_time)

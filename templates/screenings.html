@@ -29,7 +29,7 @@
 <script>
   async function init() {
     const [movies, theaters] = await Promise.all([
-      apiGet("/api/movies"), apiGet("/api/theaters")
+      apiGet("/api/movies/active"), apiGet("/api/theaters")
     ]);
     document.getElementById("movie").innerHTML =
       movies.map(m => `<option value="${m.MOVIE_ID}">${m.MOVIE_TITLE} (${m.MOVIE_RATING})</option>`).join("");

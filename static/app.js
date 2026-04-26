@@ -19,6 +19,32 @@ async function apiPost(url, body) {
   return data;
 }
 
+async function apiPut(url, body) {
+  const r = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(data.detail || "Request failed");
+  }
+  return data;
+}
+
+async function apiDelete(url, body) {
+  const r = await fetch(url, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(data.detail || "Request failed");
+  }
+  return data;
+}
+
 function showMessage(elId, text, kind = "ok") {
   const el = document.getElementById(elId);
   if (!el) return;
