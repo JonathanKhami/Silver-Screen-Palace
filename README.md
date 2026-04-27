@@ -38,8 +38,7 @@ remember it.
 ### 2. Create the database
 Open MySQL Workbench, connect to your local server, then File > Open SQL Script
 and run:
-1. `sql/01_schema.sql` (creates the database and tables)
-2. `sql/02_seed.sql` (fills in sample data)
+1. `sql/01_schema.sql` (creates the database and tables as well as adds seed data)
 
 ### 3. Install Python dependencies
 ```
