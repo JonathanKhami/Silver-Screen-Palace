@@ -13,7 +13,6 @@ silver_screen/
 │   └── models.py        <- Pydantic request schemas
 ├── sql/
 │   ├── 01_schema.sql    <- Creates database + 8 tables
-│   └── 02_seed.sql      <- Sample data
 ├── static/              <- CSS + JS
 │   ├── app.js           <- Web utilities and REST API convenience functions
 │   └── style.css        <- Styling used throughout the website
